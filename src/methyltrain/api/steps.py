@@ -1,0 +1,296 @@
+"""
+methyltrain.api.steps
+-----------------------
+
+End-to-end workflow wrapper for downloading and engineering DNA methylation 
+datasets for machine learning applications.
+
+This module exposes individual functions for orchestrating the complete dataset preparation workflow.
+
+Functions
+---------
+(function)
+    (description)
+
+Author
+------
+Sophia Li
+
+Affiliation
+-----------
+CCG Lab (Kumar Lab), Princess Margaret Cancer Center, UHN, University of Toronto
+
+Date
+----
+2026-01-07
+"""
+
+import pandas as pd
+import anndata as ad
+import numpy as np
+
+from concurrent.futures import ThreadPoolExecutor
+from sklearn.model_selection import train_test_split
+from typing import Dict, List
+from pathlib import Path
+
+from ..fs.layout import ProjectLayout
+from ..utils.utils import load_sample
+
+
+# =====| Workflow |=============================================================
+
+def download(config: Dict, layout: ProjectLayout) -> None:
+
+
+    # ==================
+    # under construction
+    # ==================
+
+
+
+
+
+
+    
+
+    # clean manifest: remove duplicates of file_id
+    # clean manifest: only extract specific array_type
+
+    # clean the metadata and manifest for samples successfully downloaded
+    return
+
+def clean(layout: ProjectLayout) -> None:
+
+    # set sample ID to config.downloading.sample_id instead of filename
+
+    # ==================
+    # under construction
+    # ==================
+
+
+    return
+
+
+def quality_control(adata: ad.AnnData, config: Dict) -> ad.AnnData:
+
+    # add to adata.uns[...] (see load_raw_project)
+
+    # ==================
+    # under construction
+    # ==================
+
+
+
+    return ad.AnnData()
+
+
+def preprocess(adata: ad.AnnData, config: Dict) -> ad.AnnData:
+
+    # add to adata.uns[...] (see load_raw_project)
+
+    # ==================
+    # under construction
+    # ==================
+
+
+    return ad.AnnData()
+
+
+def aggregate(adatas: List[ad.AnnData]) -> ad.AnnData:
+    """
+    Aggregates multiple project AnnData objects into a single cohort AnnData 
+    object. Takes the common set of genes from all projects.
+
+    Parameters
+    ----------
+    adatas : List of ad.AnnData
+        List of project AnnData objects.
+
+    Returns
+    -------
+    ad.AnnData
+        Aggregated cohort AnnData object.
+    """
+
+    return ad.concat(adatas, join = "inner")
+
+
+def split(adata: ad.AnnData, config: Dict) -> tuple[ad.AnnData, ad.AnnData, 
+                                                    ad.AnnData]:
+    """
+    Split a cohort AnnData object into stratified train, validation, and test 
+    sets based on project using the ratio provided in the configurations.
+    
+    Parameters
+    ----------
+    adata : ad.AnnData
+        AnnData object representing a project's DNA methylation data.
+    config : dict
+        Configuration dictionary controlling workflow steps.
+
+    Returns
+    -------
+    tuple[ad.AnnData, ad.AnnData, ad.AnnData]
+        The train, validation, and test stratified splits as ad.AnnData objects.
+    """
+
+    # Split into train+validation and test
+    train_val_idx, test_idx = train_test_split(
+        adata.obs_names, 
+        test_size = config.get('split', [])[2],
+        stratify = adata.obs['project'],
+        random_state = config.get('seed', 42),
+        shuffle = True
+    )
+
+    # Parse train_val_idx to split again
+    stratify_array = np.array(
+        adata.obs['project'].reindex(list(train_val_idx)), 
+        dtype = str
+    )
+
+    # Split into train and validation
+    train_idx, val_idx = train_test_split(
+        train_val_idx,
+        test_size = config.get('split', [])[1],
+        stratify = stratify_array,
+        random_state = config.get('seed', 42),
+        shuffle = True
+    )
+
+    # Slice the cohort AnnData object according to the defined splits
+    train_adata = adata[train_idx].copy()
+    val_adata = adata[val_idx].copy()
+    test_adata = adata[test_idx].copy()
+
+    # Update each AnnData object's global metadata
+    train_adata.uns['split'] = "training"
+    val_adata.uns['split'] = "validation"
+    test_adata.uns['split'] = "test"
+
+    train_adata.uns['split_percentage'] = config.get('split', [])[0]
+    val_adata.uns['split_percentage'] = config.get('split', [])[1]
+    test_adata.uns['split_percentage'] = config.get('split', [])[2]
+
+    return train_adata, val_adata, test_adata
+
+
+# =====| Project I/O |==========================================================
+
+def load_raw_project(config: Dict, layout: ProjectLayout) -> ad.AnnData:
+    """
+    Load the raw DNA methylation data of a project as an AnnData object from 
+    `.parquet` files in the raw data directory. Column metadata is initialized as the sample ID field specified in the user-provided configurations.
+
+    All raw DNA methylation data files are loaded in parallel using for more 
+    efficient loading. Note that `ThreadPoolExecutor.map()` explicitly 
+    preserves input order such that the native order of `project_dir` can be 
+    used to align sample IDs using the metadata.
+
+    Assumes metadata is perfectly alligned with the data available in the 
+    project raw data directory (as per the download() function).
+    
+    Parameters
+    ----------
+    project_dir : Path
+        Path to a project directory.
+    config: dict
+        Configuration dictionary controlling workflow steps.
+    layout : ProjectLayout
+        Object representing a project dataset directory layout.
+
+    Returns
+    -------
+    ad.AnnData
+        Raw DNA methylation and metadata of the specified project loaded as an 
+        AnnData object.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the project directory path does not exist or is empty.
+    """
+
+    # Verify the project raw data directory exists and is not empty
+    raw_dir = layout.raw_dir
+
+    if not raw_dir.is_dir():
+        raise FileExistsError(f"Project directory was not found: {raw_dir}")
+    if not any(raw_dir.iterdir()):
+        raise FileExistsError(f"Project directory is empty: {raw_dir}")
+
+    # Load all beta values in parallel as a list of Pandas DataFrames
+    files = [f for f in raw_dir.iterdir() if f.is_file()]
+
+    with ThreadPoolExecutor() as ex:
+        sample_beta_values = list(ex.map(load_sample, files))
+
+    # Concatenate on the index to build a matrix
+    cpg_matrix = pd.concat(sample_beta_values, axis = 1, join = "outer")
+    cpg_matrix = cpg_matrix.sort_index()
+
+    # Load the metadata and align the sample IDs
+    metadata = pd.read_csv(layout.metadata_file)
+    metadata = metadata.set_index('file_name').sort_index()
+
+    # Initialize the CpG matrix as an AnnData object with aligned metadata
+    adata = ad.AnnData(X = cpg_matrix.T)
+    adata.obs = metadata
+
+    # Initialize global metadata for the project
+    adata.uns['data_type'] = "cpg_matrix"
+    adata.uns['state'] = "raw"
+    adata.uns['preprocessing_steps'] = []
+
+    # Default train-val-test split metadata to NA
+    adata.uns['split'] = None
+    adata.uns['split_percentage'] = None
+    
+    return adata
+
+
+def load_processed_project(processed_file: Path | str) -> ad.AnnData:
+    """
+    Loads a processed project AnnData object.
+
+    Parameters
+    ----------
+    processed_file : Path or str
+        Full path to the processed .h5ad file.
+
+    Returns
+    -------
+    ad.AnnData
+        The loaded processed dataset.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the processed file path does not exist.
+    """
+    processed_file = Path(processed_file)
+
+    if not processed_file.exists():
+        raise FileNotFoundError(f"Processed file not found: {processed_file}")
+    return ad.read_h5ad(processed_file)
+
+
+def save_project(path: Path) -> None:
+
+
+
+    # ==================
+    # under construction
+    # ==================
+
+
+
+
+
+
+
+    # Saves any anndata object at a checkpoint
+
+    # convert to sparse if not already
+    return
