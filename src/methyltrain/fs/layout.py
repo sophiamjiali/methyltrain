@@ -43,11 +43,6 @@ class CohortLayout:
 
 
 
-
-
-
-
-
 class ProjectLayout:
     """
     Encapsulates the directory structure for a DNA methylation dataset 
@@ -70,10 +65,17 @@ class ProjectLayout:
     raw_dir : str or Path, optional
         Directory for raw methylation data. Overrides `root_dir` default if 
         provided.
-    metadata_file : str or Path, optional
-        Path for the metadata file. Overrides `root_dir` default if provided.
-    manifest_file : str or Path, optional
-        Path for the manifest file. Overrides `root_dir` default if 
+    raw_metadata : str or Path, optional
+        Path for the raw metadata file. Overrides `root_dir` default if 
+        provided.
+    raw_manifest : str or Path, optional
+        Path for the raw manifest file. Overrides `root_dir` default if 
+        provided.
+    processed_metadata : str or Path, optional
+        Path for the processed metadata file. Overrides `root_dir` default if 
+        provided.
+    processed_manifest : str or Path, optional
+        Path for the processed manifest file. Overrides `root_dir` default if 
         provided.
     processed_dir : str or Path, optional
         Directory for final processed data. Overrides `root_dir` default if 
@@ -83,8 +85,10 @@ class ProjectLayout:
     ----------
     project_name : str
     raw_dir : Path
-    metadata_file : Path
-    manifeset_file: Path
+    raw_metadata : Path
+    raw_manifest: Path
+    processed_metadata : Path
+    processed_manifest : Path
     processed_dir : Path
     """
 
@@ -92,8 +96,10 @@ class ProjectLayout:
                  project_name: str = "",
                  root_dir: Optional[StrPath] = None,
                  raw_dir: Optional[StrPath] = None,
-                 metadata_file: Optional[StrPath] = None,
-                 manifest_file: Optional[StrPath] = None,
+                 raw_metadata: Optional[StrPath] = None,
+                 raw_manifest: Optional[StrPath] = None,
+                 processed_metadata: Optional[StrPath] = None,
+                 processed_manifest: Optional[StrPath] = None,
                  processed_dir: Optional[StrPath] = None):
         
         self.project_name = project_name
@@ -105,21 +111,35 @@ class ProjectLayout:
         self.raw_dir: Path = (Path(raw_dir) if raw_dir is not None else 
                               root_path / "raw")
         
-        self.metadata_file: Path = (
-            Path(metadata_file) if metadata_file is not None 
-            else root_path / f"{[project_name]}_metadata.csv"
+        self.raw_metadata: Path = (
+            Path(raw_metadata) if raw_metadata is not None 
+            else root_path / f"{[project_name]}_raw_metadata.csv"
         )
 
-        self.manifest_file: Path = (
-            Path(manifest_file) if manifest_file is not None 
-            else root_path / f"{project_name}_manifest.csv"
+        self.raw_manifest: Path = (
+            Path(raw_manifest) if raw_manifest is not None 
+            else root_path / f"{project_name}_raw_manifest.csv"
+        )
+
+        self.processed_metadata: Path = (
+            Path(processed_metadata) if processed_metadata is not None 
+            else root_path / f"{[project_name]}_processed_metadata.csv"
+        )
+
+        self.processed_manifest: Path = (
+            Path(processed_manifest) if processed_manifest is not None 
+            else root_path / f"{project_name}_processed_manifest.csv"
         )
 
         self.processed_dir: Path = (Path(processed_dir) if processed_dir is not 
                                    None else root_path / "processed")
 
-        self.paths = [self.raw_dir, self.metadata_file, 
-                            self.manifest_file, self.processed_dir]
+        self.paths = [self.raw_dir, self.raw_metadata, self.raw_manifest, 
+                      self.processed_metadata, self.processed_manifest, 
+                      self.processed_dir]
+        
+        self.files = [self.raw_metadata, self.raw_manifest, self.
+                      processed_metadata, self.processed_manifest]
 
 
     def initialize(self):
@@ -147,6 +167,8 @@ class ProjectLayout:
         ------
         FileNotFoundError
             If any required directory is missing.
+        ValueError
+            If any of the files do not have extension `.csv`.
         """
 
         missing_paths: List[Path] = [p for p in self.paths 
@@ -156,3 +178,8 @@ class ProjectLayout:
             raise FileNotFoundError(f"The following required paths are "
                                     f"not initialized: {missing_paths}")
         
+        incorrect_paths: List[Path] = [p for p in self.files if 
+                                       p.suffix != ".csv"]
+        if incorrect_paths:
+            raise ValueError(f"The following required paths must contain the `."
+                             f"csv` extension: {incorrect_paths}")

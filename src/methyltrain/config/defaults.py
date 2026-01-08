@@ -6,8 +6,6 @@
 # Date:             2026-01-07
 # ==============================================================================
 
-from typing import List
-
 # =====| Default Configurations |===============================================
 
 DEFAULT_CONFIG = {
@@ -16,9 +14,12 @@ DEFAULT_CONFIG = {
     "split": [0.60, 0.20, 0.20],        # Train-Validate-Test split
     "seed": 42,
 
-    "array_type": "illumina methylation epic",  # Desired array type
+    "array_type": "Illumina Methylation Epic",  # Desired array type
+    "genome_build": "hg38",
 
     "toggles": {
+
+        "average_duplicates": True,   # Average duplicate samples, or take first
 
         "quality_control": {
             "sample_qc": True,
@@ -26,9 +27,14 @@ DEFAULT_CONFIG = {
         },
 
         "preprocessing": {
-            "imputation": True,
-            "batch_correction": True
+            "imputation": True,       # Perform imputation, else default to 0
+            "winsorization": True    
+        },
+
+        "aggregation": {
+            "batch_correction": True    # Perform batch correction upon cohort
         }
+        
     },
 
     "downloading": {

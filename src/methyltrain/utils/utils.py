@@ -1,8 +1,22 @@
+# ==============================================================================
+# Script:           utils.py
+# Purpose:          General utility functions for the package
+# Author:           Sophia Li
+# Affiliation:      CCG Lab, Princess Margaret Cancer Center, UHN, UofT
+# Date:             2026-01-08
+# ==============================================================================
 
 import pandas as pd
 
 from pathlib import Path
 from typing import Dict, Any
+
+from ..constants import (
+    ARRAY_TYPES, 
+    GENOME_BUILD_TYPES,
+    ANNOTATION_hg19_PATHS,
+    ANNOTATION_hg38_PATHS
+)
 
 # ======| File I/O Utilities |==================================================
 
@@ -35,6 +49,45 @@ def load_sample(file: Path) -> pd.DataFrame:
         raise FileNotFoundError(f"File must be a `.parquet`: {file}")
     
     return pd.read_parquet(file)
+
+def load_annotation(config: Dict) -> pd.DataFrame:
+    """
+    Load an Illumina annotation based on array type and genome build.
+
+    Parameters
+    ----------
+    config : dict
+        Configuration dictionary controlling workflow steps.
+
+    Returns
+    -------
+    pd.DataFrame
+        Illumina annotation for the given array type and genome build.
+
+    Raises
+    ------
+    ValueError
+        If the array type or genome build provided in the user-configurations 
+        is not valid.
+    """
+
+    array_type = config.get('array_type', '')
+    genome_build = config.get('genome_build', '')
+
+    # Verify the array type and genome build provided are valid
+    if array_type not in ARRAY_TYPES:
+        raise ValueError(f"Array type {array_type} was not recognized from the "
+                         f"supported types: {ARRAY_TYPES}")
+
+    if genome_build not in GENOME_BUILD_TYPES:
+        raise ValueError(f"Genome build {genome_build} was not recognized from "
+                         f"the supported types: {GENOME_BUILD_TYPES}")
+    
+    # Load the appropriate genome build annotation path (provided by package)
+    anno_path = (ANNOTATION_hg19_PATHS[array_type] if genome_build == 'hg19' 
+                 else ANNOTATION_hg38_PATHS[array_type])
+
+    return pd.read_parquet(anno_path)
 
 
 # ======| Dictionary Utilities |================================================
@@ -133,3 +186,17 @@ def check_dict(default: Dict[str, Any],
                 if user_val[0] < 0 or user_val[1] > 1:
                     raise ValueError(f"Key '{full_key}' must range between "
                                      "zero and one")
+                
+            elif key == "array_type":
+                if user_val not in ARRAY_TYPES:
+                    raise ValueError(
+                        f"Key '{full_key}' must be one of the following "
+                        f"supported types: {ARRAY_TYPES}"
+                    )
+                
+            elif key == "genome_build":
+                if user_val not in GENOME_BUILD_TYPES:
+                    raise ValueError(
+                        f"Key '{full_key}' must be one of the following "
+                        f"supported types: {GENOME_BUILD_TYPES}"
+                    )

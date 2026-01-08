@@ -1,29 +1,10 @@
-"""
-methyltrain.api.steps
------------------------
-
-End-to-end workflow wrapper for downloading and engineering DNA methylation 
-datasets for machine learning applications.
-
-This module exposes individual functions for orchestrating the complete dataset preparation workflow.
-
-Functions
----------
-(function)
-    (description)
-
-Author
-------
-Sophia Li
-
-Affiliation
------------
-CCG Lab (Kumar Lab), Princess Margaret Cancer Center, UHN, University of Toronto
-
-Date
-----
-2026-01-07
-"""
+# ==============================================================================
+# Script:           steps.py
+# Purpose:          Workflow steps exposed to the user
+# Author:           Sophia Li
+# Affiliation:      CCG Lab, Princess Margaret Cancer Center, UHN, UofT
+# Date:             2026-01-08
+# ==============================================================================
 
 import pandas as pd
 import anndata as ad
@@ -34,14 +15,19 @@ from sklearn.model_selection import train_test_split
 from typing import Dict, List
 from pathlib import Path
 
+from ..pipeline.quality_control import sample_qc, probe_qc
+from ..pipeline.clean import clean_metadata, clean_manifest
 from ..fs.layout import ProjectLayout
-from ..utils.utils import load_sample
+from ..utils.utils import load_sample, load_annotation
+from ..constants import (
+    ARRAY_TYPES,
+    GENOME_BUILD_TYPES
+)
 
 
 # =====| Workflow |=============================================================
 
 def download(config: Dict, layout: ProjectLayout) -> None:
-
 
     # ==================
     # under construction
@@ -55,12 +41,15 @@ def download(config: Dict, layout: ProjectLayout) -> None:
     
 
     # clean manifest: remove duplicates of file_id
+        # if average_duplicates is true, keep them
     # clean manifest: only extract specific array_type
 
     # clean the metadata and manifest for samples successfully downloaded
+
+    # save metadata and manifest as raw_* in layout
     return
 
-def clean(layout: ProjectLayout) -> None:
+def clean_data(layout: ProjectLayout) -> None:
 
     # set sample ID to config.downloading.sample_id instead of filename
 
@@ -72,7 +61,71 @@ def clean(layout: ProjectLayout) -> None:
     return
 
 
-def quality_control(adata: ad.AnnData, config: Dict) -> ad.AnnData:
+def quality_control(adata: ad.AnnData, 
+                    config: Dict, 
+                    layout: ProjectLayout) -> ad.AnnData:
+    """
+    Performes probe and/or sample quality control upon DNA methylation values 
+    presented as a CpG matrix AnnData object. Returns the quality-controlled 
+    CpG matrix AnnData object with updated metadata suitable for downstream 
+    preprocessing and analysis.
+
+    Note that quality control is intended to be performed upon raw project data (as loaded by `load_raw_project()`) and followed by preprocessing (as per `preprocess()`).
+
+    Steps performed are toggled and configured in the user-provided 
+    configurations, including the following options in order:
+
+    1. Sample-level quality control
+        a. Remove high missingness (above the provided threshold)
+        b. Remove outliers from distribution (above the provided number of SD)
+    2. Probe-level quality control 
+        a. Remove cross-reactive probes
+        b. Remove SNP-associated probes
+        c. Remove multi-mapped probes
+        d. Remove sex chromosome probes
+        e. Remove high missingness (above the provided threshold)
+
+    Generates processed metadata and manifest files for the project after 
+    quality control samples may be filtered from the dataset. If no quality 
+    control was configured to occur in the user-configurations but this 
+    function was still called, the processed files will include identical 
+    information to the raw files.
+
+    Parameters
+    ----------
+    adata : ad.AnnData
+        AnnData object representing a project's raw DNA methylation data at the 
+        CpG matrix level.
+    config : dict
+        Configuration dictionary controlling workflow steps.
+    layout : ProjectLayout
+        Object representing a project dataset directory layout.
+
+    Returns
+    -------
+    ad.AnnData
+        AnnData object representing a project's quality-controlled DNA 
+        methylation data at the CpG matrix level with updated metadata.
+
+    """
+
+    # Load the appropriate annotation provided by the package, else raises error
+    annotation = load_annotation(config)
+
+    # Perform each quality-control step if toggled by the user-configurations
+    qc_cfg = config.get('toggles', {}).get('quality_control', {})
+    
+    if qc_cfg.get('sample_qc', True):
+        adata = sample_qc(adata, config)
+    
+    if qc_cfg.get('probe_qc', True):
+        adata = probe_qc(adata, annotation, config)
+
+    # Clean the metadata and manifest; if no QC performed, same as raw
+    clean_metadata(adata, layout)
+    clean_manifest(adata, layout)
+
+
 
     # add to adata.uns[...] (see load_raw_project)
 
@@ -86,6 +139,34 @@ def quality_control(adata: ad.AnnData, config: Dict) -> ad.AnnData:
 
 
 def preprocess(adata: ad.AnnData, config: Dict) -> ad.AnnData:
+    """
+    Preprocess DNA methylation beta values of a project to a gene-level matrix. 
+    Returns a samples x genes AnnData object with aligned metadata suitable for 
+    downstream analysis.
+
+    Steps performed are toggled and configured in the user-provided 
+    configurations, including the following options in order:
+    
+    1. Imputation of missing values
+    2. Winsorization (of values exactly zero or one)
+
+    Note that batch effect correction is optionally performed after multiple 
+    projects have been aggregated into a cohort.
+
+    Parameters
+    ----------
+    adata : ad.AnnData
+        AnnData object representing a project's quality-controlled (or raw if 
+        QC was not performed) DNA methylation data at the CpG matrix level.
+    config : dict
+        Configuration dictionary controlling workflow steps.
+
+    Returns
+    -------
+    ad.AnnData
+        AnnData object representing a project's preprocessed DNA methylation 
+        data at the gene matrix level with updated metadata.
+    """
 
     # add to adata.uns[...] (see load_raw_project)
 
@@ -125,7 +206,7 @@ def split(adata: ad.AnnData, config: Dict) -> tuple[ad.AnnData, ad.AnnData,
     Parameters
     ----------
     adata : ad.AnnData
-        AnnData object representing a project's DNA methylation data.
+        AnnData object representing a project's quality-controlled, preprocessed, and batch effect corrected DNA methylation data at the gene matrix level.
     config : dict
         Configuration dictionary controlling workflow steps.
 
@@ -212,6 +293,12 @@ def load_raw_project(config: Dict, layout: ProjectLayout) -> ad.AnnData:
         If the project directory path does not exist or is empty.
     """
 
+
+    # if average_duplicates is true, if there are duplicates, average them into # one (update metadata) (if toggled)
+
+
+
+
     # Verify the project raw data directory exists and is not empty
     raw_dir = layout.raw_dir
 
@@ -231,7 +318,7 @@ def load_raw_project(config: Dict, layout: ProjectLayout) -> ad.AnnData:
     cpg_matrix = cpg_matrix.sort_index()
 
     # Load the metadata and align the sample IDs
-    metadata = pd.read_csv(layout.metadata_file)
+    metadata = pd.read_csv(layout.raw_metadata)
     metadata = metadata.set_index('file_name').sort_index()
 
     # Initialize the CpG matrix as an AnnData object with aligned metadata

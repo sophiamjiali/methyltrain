@@ -13,7 +13,7 @@ import anndata as ad
 from ..fs.layout import ProjectLayout, CohortLayout
 from .steps import (
     download, 
-    clean, 
+    clean_data, 
     quality_control, 
     preprocess, 
     aggregate, 
@@ -46,9 +46,9 @@ def prepare_dataset(config: Dict, layout: ProjectLayout) -> ad.AnnData:
     layout.initialize()
 
     download(config, layout)
-    clean(layout)
+    clean_data(layout)
     adata = load_raw_project(config, layout)
-    adata = quality_control(adata, config)
+    adata = quality_control(adata, config, layout)
     adata = preprocess(adata, config)
 
     return adata
