@@ -11,11 +11,14 @@
 DEFAULT_CONFIG = {
 
     "project": "TCGA-KIRP",
-    "split": [0.60, 0.20, 0.20],        # Train-Validate-Test split
-    "seed": 42,
 
-    "array_type": "Illumina Methylation Epic",  # Desired array type
+    "array_type": "Illumina Methylation 450" ,
     "genome_build": "hg38",
+    "tissue_type": "tumor",
+    "tumor_descriptor": "primary",
+
+    "split": [0.60, 0.20, 0.20],
+    "seed": 42,
 
     "toggles": {
 
@@ -48,13 +51,14 @@ DEFAULT_CONFIG = {
     "quality_control": {
         "sample_qc": {
             "missing_threshold": 0.05,
-            "outlier_threshold": 0
+            "outlier_threshold": 3      # Number of SD beyond the global distr.
         },
 
         "probe_qc": {
             "remove_cross_reactive": True,
             "remove_SNP_associated": True,
             "remove_sex_chromosome": True,
+            "remove_multi_mapped": True,
             "missing_threshold": 0.05, 
         }
     },

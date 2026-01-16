@@ -6,10 +6,13 @@
 # Date:             2026-01-08
 # ==============================================================================
 
+import numpy as np
 import anndata as ad
 import pandas as pd
 
 from typing import Dict
+
+from ..utils.utils import iqr_bounds
 
 def sample_qc(adata: ad.AnnData, config: Dict) -> ad.AnnData:
     """
@@ -36,12 +39,39 @@ def sample_qc(adata: ad.AnnData, config: Dict) -> ad.AnnData:
         DNA methylation data at the CpG matrix level with updated metadata.
     """
 
-    
+    # Fetch relevant thresholds
+    qc_cfg = config.get('quality_control', {}).get('sample_qc', {})
+    missing_threshold = qc_cfg.get('missing_threshold', 0.05)
+    outlier_threshold = qc_cfg.get('outlier_threshold', 3)
 
+    # Filter samples for missingness above the provided threshold
+    cpg_matrix = np.asarray(adata.X)
+    missing_rate = np.isnan(cpg_matrix).mean(axis = 1)
+    fail_missing = missing_rate > missing_threshold
 
-    
+    # Filter samples for global distribution beyond k STD using IQR
+    sample_mean = np.nanmean(cpg_matrix, axis = 1)
+    sample_std = np.nanstd(cpg_matrix, axis = 1)
 
-    return ad.AnnData()
+    mean_lo, mean_hi = iqr_bounds(sample_mean, outlier_threshold)
+    std_lo, std_hi = iqr_bounds(sample_std, outlier_threshold)
+
+    fail_mean = (sample_mean < mean_lo) | (sample_mean > mean_hi)
+    fail_std  = (sample_std  < std_lo)  | (sample_std  > std_hi)
+
+    # Generate failure mask using missingness and IQR
+    fail_any = fail_missing | fail_mean | fail_std
+    adata._inplace_subset_obs(~fail_any)
+
+    # Set global metadata
+    adata.obs['missing_rate'] = missing_rate
+    adata.obs['mean_beta'] = sample_mean
+    adata.obs['std_beta'] = sample_std
+
+    adata.uns['preprocessing_steps'].append("sample_qc")
+
+    return adata
+
 
 def probe_qc(adata: ad.AnnData, 
              annotation: pd.DataFrame, 
@@ -49,7 +79,7 @@ def probe_qc(adata: ad.AnnData,
     """
     Performs probe-level quality control upon DNA methylation values presented as a CpG matrix AnnData object. Returns the quality-controlled CpG matrix AnnData object with updated metadata suitable for further preprocessing.
 
-    Steps performed are toggled and ocnfigured in the user-provided 
+    Steps performed are toggled and configured in the user-provided 
     configurations, including the following options in order:
 
     1. Remove cross-reactive probes
@@ -76,5 +106,39 @@ def probe_qc(adata: ad.AnnData,
         AnnData object representing a project's probe-level quality-controlled 
         DNA methylation data at the CpG matrix level with updated metadata.
     """
+
+    # Fetch relevant thresholds
+    probe_cfg = config.get('quality_control', {}).get('probe_qc', {})
+    missing_threshold = probe_cfg.get('missing_threshold', 0.05)
+
+    # Remove non-standard probes
+    keep_standard = adata.var_names.str.startswith('cg')
+
+    # Filter by missingness
+    missing_rate = np.isnan(np.asarray(adata.X)).mean(axis = 0)
+    keep_missing = missing_rate <= missing_threshold
+
+    # Filter by annotation flags provided in the annotation object
+    annotation = annotation.set_index('probe_id').reindex(adata.var_names)
+    keep_annotation = pd.Series(True, index = annotation.index)
+
+    if probe_cfg.get('remove_sex_chromosome', True):
+        keep_annotation &= ~annotation['is_sex_chr']
+    if probe_cfg.get('remove_SNP_associated', True):
+        keep_annotation &= ~annotation['has_cpg_snp']
+        keep_annotation &= ~annotation['has_sbe_snp']
+        keep_annotation &= ~annotation['has_probe_snp']
+    if probe_cfg.get('remove_cross_reactive', True):
+        keep_annotation &= ~annotation['is_cross_reactive']
+    if probe_cfg.get('remove_multi_mapped', True):
+        keep_annotation &= ~annotation['is_multi_mapped']
+
+    # Combine filters and subset the matrix
+    pass_qc = keep_standard & keep_missing & keep_annotation
+    adata._inplace_subset_var(pass_qc)
+
+    # Set global metadata
+    adata.var['missing_rate'] = missing_rate
+    adata.uns['preprocessing_steps'].append("probe_qc")
 
     return ad.AnnData()

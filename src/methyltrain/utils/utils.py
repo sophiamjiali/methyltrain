@@ -6,6 +6,7 @@
 # Date:             2026-01-08
 # ==============================================================================
 
+import numpy as np
 import pandas as pd
 
 from pathlib import Path
@@ -200,3 +201,10 @@ def check_dict(default: Dict[str, Any],
                         f"Key '{full_key}' must be one of the following "
                         f"supported types: {GENOME_BUILD_TYPES}"
                     )
+
+# ======| Computation Utilities |===============================================
+
+def iqr_bounds(x, k):
+    q1, q3 = np.nanpercentile(x, [25, 74])
+    iqr = q3 - q1
+    return q1 - k * iqr, q3 + k * iqr

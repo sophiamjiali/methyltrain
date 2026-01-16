@@ -57,6 +57,9 @@ def clean_data(layout: ProjectLayout) -> None:
     # under construction
     # ==================
 
+    # - if different aliquots map to the same sample/case, kept a representative
+    #   profile by selecting the most recently generated file
+
 
     return
 
@@ -126,8 +129,6 @@ def quality_control(adata: ad.AnnData,
     clean_manifest(adata, layout)
 
 
-
-    # add to adata.uns[...] (see load_raw_project)
 
     # ==================
     # under construction
@@ -271,6 +272,10 @@ def load_raw_project(config: Dict, layout: ProjectLayout) -> ad.AnnData:
 
     Assumes metadata is perfectly alligned with the data available in the 
     project raw data directory (as per the download() function).
+
+    Default behaviour resolves case-level duplicates (aliquots) by retaining 
+    only the first replicate. Performing mean aggregation across aliquots is not
+    advised.
     
     Parameters
     ----------
@@ -292,12 +297,6 @@ def load_raw_project(config: Dict, layout: ProjectLayout) -> ad.AnnData:
     FileNotFoundError
         If the project directory path does not exist or is empty.
     """
-
-
-    # if average_duplicates is true, if there are duplicates, average them into # one (update metadata) (if toggled)
-
-
-
 
     # Verify the project raw data directory exists and is not empty
     raw_dir = layout.raw_dir
@@ -322,8 +321,12 @@ def load_raw_project(config: Dict, layout: ProjectLayout) -> ad.AnnData:
     metadata = metadata.set_index('file_name').sort_index()
 
     # Initialize the CpG matrix as an AnnData object with aligned metadata
-    adata = ad.AnnData(X = cpg_matrix.T)
-    adata.obs = metadata
+    adata = ad.AnnData(
+        X = cpg_matrix.T.values,
+        obs = metadata,
+        var = pd.DataFrame(index = cpg_matrix.index)
+    )
+
 
     # Initialize global metadata for the project
     adata.uns['data_type'] = "cpg_matrix"
