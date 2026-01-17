@@ -141,4 +141,4 @@ def probe_qc(adata: ad.AnnData,
     adata.var['missing_rate'] = missing_rate
     adata.uns['preprocessing_steps'].append("probe_qc")
 
-    return ad.AnnData()
+    return adata

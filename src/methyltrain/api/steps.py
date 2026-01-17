@@ -49,6 +49,7 @@ def download(config: Dict, layout: ProjectLayout) -> None:
     # save metadata and manifest as raw_* in layout
     return
 
+
 def clean_data(layout: ProjectLayout) -> None:
 
     # set sample ID to config.downloading.sample_id instead of filename
@@ -128,15 +129,7 @@ def quality_control(adata: ad.AnnData,
     clean_metadata(adata, layout)
     clean_manifest(adata, layout)
 
-
-
-    # ==================
-    # under construction
-    # ==================
-
-
-
-    return ad.AnnData()
+    return adata
 
 
 def preprocess(adata: ad.AnnData, config: Dict) -> ad.AnnData:
@@ -326,7 +319,6 @@ def load_raw_project(config: Dict, layout: ProjectLayout) -> ad.AnnData:
         obs = metadata,
         var = pd.DataFrame(index = cpg_matrix.index)
     )
-
 
     # Initialize global metadata for the project
     adata.uns['data_type'] = "cpg_matrix"

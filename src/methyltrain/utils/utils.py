@@ -51,6 +51,7 @@ def load_sample(file: Path) -> pd.DataFrame:
     
     return pd.read_parquet(file)
 
+
 def load_annotation(config: Dict) -> pd.DataFrame:
     """
     Load an Illumina annotation based on array type and genome build.

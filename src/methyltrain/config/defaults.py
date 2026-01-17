@@ -66,7 +66,5 @@ DEFAULT_CONFIG = {
     "preprocessing": {
         "imputation": "lalalalalalallalalalalalalalalallalalalalalalalal",
         "clip_values": [0.001, 99.99] # fix
-    }
-
-        
+    }     
 }
